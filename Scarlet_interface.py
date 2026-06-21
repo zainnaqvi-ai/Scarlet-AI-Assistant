@@ -8,11 +8,8 @@ import pygame
 import os
 import time
 import threading
-import math  # Used for calculating smooth pulsing animations
+import math
 
-# =====================================================================
-# 1. CONFIGURATION & SETUP
-# =====================================================================
 newsapi_key = "news api here"
 
 recognizer = sr.Recognizer()
@@ -20,21 +17,15 @@ recognizer = sr.Recognizer()
 ASSISTANT_NAME = "scarlet"
 WAKE_WORD = "scarlet"
 
-# Initialize pygame mixer once at startup (not inside speak())
 pygame.mixer.init()
 
-# Initialize Wikipedia API client once at startup
 wiki = wikipediaapi.Wikipedia(user_agent='Scarlet/1.0 (personal voice assistant project)', language='en')
 
 
-# =====================================================================
-# 2. HOLOGRAPHIC SCI-FI INTERFACE (Jarvis-style, fullscreen)
-# =====================================================================
 class ScarletApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # Window Setup -- fullscreen, fills the entire screen
         self.title("Scarlet AI Arc Interface")
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
@@ -43,8 +34,7 @@ class ScarletApp(ctk.CTk):
         ctk.set_appearance_mode("dark")
         self.configure(fg_color="#050912")
 
-        # Escape key drops out of fullscreen so you're never trapped
-        self.bind("<Escape>", lambda e: self.exit_fullscreen())
+        self.bind("<Escape>", lambda e: self.exit_fullscreen())  # don't want to get stuck fullscreen
 
         self.screen_w = screen_w
         self.screen_h = screen_h
@@ -54,50 +44,41 @@ class ScarletApp(ctk.CTk):
         self.pulse_counter = 0
         self.ray_counter = 0
         self.status_text = "CORE OFFLINE"
-        self.status_color = "#005577"  # Dim blue when offline
+        self.status_color = "#005577"
 
-        # --- Responsive Grid Layout ---
-        # Row 2 (the canvas) gets all leftover space -- this is what guarantees
-        # everything else (title, button, hint) always stays visible on screen
-        # no matter the resolution, instead of relying on fixed pixel math.
+        # using grid here instead of pack so the button doesn't get pushed off
+        # screen on smaller resolutions - canvas row takes whatever space is left
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0)  # title
-        self.grid_rowconfigure(1, weight=0)  # status
-        self.grid_rowconfigure(2, weight=1)  # canvas -- stretches
-        self.grid_rowconfigure(3, weight=0)  # button
-        self.grid_rowconfigure(4, weight=0)  # hint
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=0)
+        self.grid_rowconfigure(4, weight=0)
 
-        # Top Header Title
         self.title_label = ctk.CTkLabel(
             self, text="S.C.A.R.L.E.T. INTERFACE",
             font=("Consolas", 30, "bold"), text_color="#00ffff"
         )
         self.title_label.grid(row=0, column=0, pady=(30, 5), sticky="n")
 
-        # Sub-status text element
         self.status_label = ctk.CTkLabel(
             self, text="Awaiting Core Initialization...",
             font=("Consolas", 18), text_color="#00aacc"
         )
         self.status_label.grid(row=1, column=0, pady=(0, 8), sticky="n")
 
-        # Container frame so the canvas can be centered and resized dynamically
         self.canvas_frame = ctk.CTkFrame(self, fg_color="#050912")
         self.canvas_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
         self.canvas_frame.grid_rowconfigure(0, weight=1)
         self.canvas_frame.grid_columnconfigure(0, weight=1)
 
-        # Vector Graphics Canvas for the Holographic HUD Circle.
-        # Size is recalculated live from the frame's actual rendered size
-        # (see on_canvas_resize), so it always fits regardless of screen size.
         self.canvas = ctk.CTkCanvas(
             self.canvas_frame, bg="#050912", highlightthickness=0
         )
         self.canvas.grid(row=0, column=0, sticky="nsew")
-        self.canvas_render_size = 400  # safe default before first resize event
+        self.canvas_render_size = 400
         self.canvas_frame.bind("<Configure>", self.on_canvas_resize)
 
-        # High-Tech Initialize Button
         self.start_btn = ctk.CTkButton(
             self, text="INITIALIZE CORE", font=("Consolas", 18, "bold"),
             fg_color="#004466", hover_color="#006699", border_color="#00ffff",
@@ -106,19 +87,16 @@ class ScarletApp(ctk.CTk):
         )
         self.start_btn.grid(row=3, column=0, pady=(8, 15), sticky="n")
 
-        # Hint label for exiting fullscreen
         self.hint_label = ctk.CTkLabel(
             self, text="Press ESC to exit fullscreen",
             font=("Consolas", 11), text_color="#335566"
         )
         self.hint_label.grid(row=4, column=0, pady=(0, 10), sticky="n")
 
-        # Trigger the animation graphics engine loop
         self.update_animation()
 
     def on_canvas_resize(self, event):
-        """Keeps the HUD circle perfectly centered and sized to fit whatever
-        space is actually available, instead of a hardcoded guess."""
+        # recalc HUD size whenever the window/canvas changes size
         size = max(min(event.width, event.height) - 20, 150)
         self.canvas_render_size = size
 
@@ -127,25 +105,19 @@ class ScarletApp(ctk.CTk):
         self.geometry(f"{900}x{700}+100+50")
 
     def update_animation(self):
-        """Draws and updates the rotating vector rings + radiating rays at 60FPS."""
-        self.canvas.delete("hud")  # Clear previous frame
+        self.canvas.delete("hud")
 
         size = self.canvas_render_size
-        # Center against the canvas's actual current rendered dimensions,
-        # not just size/2, so the HUD stays centered even if the canvas
-        # frame isn't perfectly square.
         cw = self.canvas.winfo_width() or size
         ch = self.canvas.winfo_height() or size
         cx, cy = cw / 2, ch / 2
 
         if self.is_running:
-            # Spin speeds when the AI is active
             self.hud_angle = (self.hud_angle + 2) % 360
             self.pulse_counter += 0.07
             self.ray_counter += 0.05
             pulse_offset = math.sin(self.pulse_counter) * (size * 0.015)
         else:
-            # Subtle slow idle motion when turned off
             self.hud_angle = (self.hud_angle + 0.3) % 360
             self.ray_counter += 0.01
             pulse_offset = 0
@@ -155,9 +127,9 @@ class ScarletApp(ctk.CTk):
         inner_r = size * 0.27
         core_r = size * 0.18
 
-        # 0. Radiating Jarvis-style light rays from the core outward
+        # rays radiating out from the core, like a jarvis-style HUD
         ray_count = 24
-        ray_pulse = math.sin(self.ray_counter) * 0.15 + 0.85  # gentle brightness breathing
+        ray_pulse = math.sin(self.ray_counter) * 0.15 + 0.85
         for i in range(ray_count):
             angle_deg = (i * (360 / ray_count)) + self.hud_angle * 0.4
             angle_rad = math.radians(angle_deg)
@@ -172,7 +144,7 @@ class ScarletApp(ctk.CTk):
                 fill=self.status_color, width=1, tags="hud"
             )
 
-        # 1. Outer Tech Dashed Ring (Clockwise)
+        # outer ring
         for i in range(4):
             start = (self.hud_angle + (i * 90)) % 360
             self.canvas.create_arc(
@@ -181,7 +153,7 @@ class ScarletApp(ctk.CTk):
                 style="arc", outline=self.status_color, width=2, tags="hud"
             )
 
-        # 2. Middle Solid Split Ring (Counter-Clockwise)
+        # middle ring, spins the other way
         for i in range(2):
             start = (-self.hud_angle * 1.5 + (i * 180)) % 360
             self.canvas.create_arc(
@@ -190,7 +162,7 @@ class ScarletApp(ctk.CTk):
                 style="arc", outline=self.status_color, width=5, tags="hud"
             )
 
-        # 3. Inner Measured Calibration Ring (Clockwise)
+        # inner ring, smaller segments
         for i in range(8):
             start = (self.hud_angle * 0.5 + (i * 45)) % 360
             self.canvas.create_arc(
@@ -199,7 +171,6 @@ class ScarletApp(ctk.CTk):
                 style="arc", outline=self.status_color, width=1, tags="hud"
             )
 
-        # 4. Deep Core Pulsing Power Sphere (glow effect via layered ovals)
         r1 = core_r + pulse_offset
         glow_color = "#00ffff" if self.is_running else self.status_color
         self.canvas.create_oval(
@@ -211,7 +182,6 @@ class ScarletApp(ctk.CTk):
             outline=glow_color, width=3, tags="hud"
         )
 
-        # 5. Core Interface Central Text Badge -- assistant name front and center
         self.canvas.create_text(
             cx, cy, text=ASSISTANT_NAME.upper(),
             fill="#ffffff" if self.is_running else "#777777",
@@ -223,36 +193,29 @@ class ScarletApp(ctk.CTk):
             font=("Consolas", int(size * 0.022), "bold"), tags="hud"
         )
 
-        # Loop the drawing method frame roughly every 16ms (~60 FPS)
-        self.after(16, self.update_animation)
+        self.after(16, self.update_animation)  # ~60fps
 
     def toggle_system(self):
-        """Handles activating and deactivating core systems safely."""
         if not self.is_running:
             self.is_running = True
-            self.status_color = "#00ffff"  # Bright vibrant neon cyan
+            self.status_color = "#00ffff"
             self.status_text = "ACTIVE"
             self.status_label.configure(text="System online. Microphone listening...")
             self.start_btn.configure(text="SHUT DOWN CORE", fg_color="#330000", hover_color="#550000",
                                      border_color="#ff4444", text_color="#ff4444")
 
-            # Offload listening tasks to an isolated background safety thread
             threading.Thread(target=self.run_assistant_loop, daemon=True).start()
         else:
             self.is_running = False
-            self.status_color = "#005577"  # Back to dim offline colors
+            self.status_color = "#005577"
             self.status_text = "CORE OFFLINE"
             self.status_label.configure(text="Awaiting Core Initialization...")
             self.start_btn.configure(text="INITIALIZE CORE", fg_color="#004466", hover_color="#006699",
                                      border_color="#00ffff", text_color="#00ffff")
             self.shutdown()
 
-    # =================================================================
-    # 3. CORE VOICE ENGINE LOGIC (Thread-Safe integration)
-    # =================================================================
     def speak(self, text):
         print(f"Scarlet: {text}")
-        # Temporarily morph interface ring color to show she is talking
         old_text = self.status_text
         self.status_text = "SPEAKING"
 
@@ -399,9 +362,6 @@ class ScarletApp(ctk.CTk):
         print("[INFO] Scarlet hardware loop cleanly detached.")
 
 
-# =====================================================================
-# 4. INITIAL EXECUTION
-# =====================================================================
 if __name__ == "__main__":
     app = ScarletApp()
     app.mainloop()

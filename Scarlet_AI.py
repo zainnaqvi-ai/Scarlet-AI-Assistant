@@ -9,16 +9,13 @@ import time
 
 recognizer = sr.Recognizer()
 
-#NEWSAPI KEY:
-newsapi_key = "news api here"
+newsapi_key = "News api key here"  # get one free from newsapi.org
 
 ASSISTANT_NAME = "scarlet"
-WAKE_WORD      = "scarlet" or "scar"
+WAKE_WORD = "scarlet"
 
-# Initialize pygame mixer once at startup (not inside speak())
-pygame.mixer.init()
+pygame.mixer.init()  # only do this once, not every time speak() runs
 
-# Initialize Wikipedia API client once at startup
 wiki = wikipediaapi.Wikipedia(user_agent='Scarlet/1.0 (personal voice assistant project)', language='en')
 
 
@@ -44,6 +41,7 @@ def speak(text):
 
 
 def search_wikipedia(query):
+    # strip the trigger phrase so we're left with just the actual topic
     try:
         for phrase in ["who is", "what is", "tell me about", "search wikipedia for", "wikipedia"]:
             query = query.lower().replace(phrase, "")
@@ -70,7 +68,6 @@ def search_wikipedia(query):
 
 
 def process_command(command):
-
     command = command.lower()
 
     if "open google" in command:
@@ -110,7 +107,6 @@ def process_command(command):
 
 
 def listen_for_wake_word():
-    """Listens for the wake word, returns heard text lowercased (or None)."""
     with sr.Microphone() as source:
         print(f"\n[Listening for wake word '{WAKE_WORD}'...]")
         recognizer.adjust_for_ambient_noise(source, duration=0.5)
@@ -132,7 +128,6 @@ def listen_for_wake_word():
 
 
 def listen_for_command():
-    """Listens for the follow-up command, returns text (or None)."""
     with sr.Microphone() as source:
         print("[Listening for your command...]")
         try:
@@ -154,7 +149,6 @@ def listen_for_command():
 
 
 def shutdown():
-    """Clean shutdown - releases mic/audio resources before exiting."""
     try:
         pygame.mixer.quit()
     except Exception:
